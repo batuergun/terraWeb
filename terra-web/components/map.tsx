@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import * as maptilersdk from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface CustomLayerInterface
   extends Omit<maptilersdk.CustomLayerInterface, "render"> {
@@ -18,7 +19,12 @@ interface CustomLayerInterface
 export default function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maptilersdk.Map | null>(null);
-  const pin = { lat: 41.3611847, lng: 36.1770237 };
+  const markerRef = useRef<maptilersdk.Marker | null>(null);
+  const [selectedCoordinates, setSelectedCoordinates] = useState<
+    [number, number] | null
+  >(null);
+  const [isChatboxOpen, setIsChatboxOpen] = useState(false);
+  const initialPin = { lat: 41.3611847, lng: 36.1770237 };
   const zoom = 14;
   maptilersdk.config.apiKey = process.env
     .NEXT_PUBLIC_MAPTILER_API_KEY as string;
@@ -29,7 +35,7 @@ export default function Map() {
     map.current = new maptilersdk.Map({
       container: mapContainer.current!,
       style: maptilersdk.MapStyle.OUTDOOR,
-      center: [pin.lng, pin.lat],
+      center: [initialPin.lng, initialPin.lat],
       zoom: zoom,
       terrain: true,
       terrainControl: true,
@@ -42,16 +48,32 @@ export default function Map() {
 
     // print clicked
     map.current.on("click", (e) => {
-      console.log("Clicked coordinates:", e.lngLat.lng, e.lngLat.lat);
+      const { lng, lat } = e.lngLat;
+      console.log("Clicked coordinates:", lng, lat);
+      setSelectedCoordinates([lng, lat]);
+
+      if (map.current) {
+        // Remove the old marker if it exists
+        if (markerRef.current) {
+          markerRef.current.remove();
+        }
+
+        // Create a new marker
+        markerRef.current = new maptilersdk.Marker({ color: "#FF0000" })
+          .setLngLat([lng, lat])
+          .addTo(map.current);
+      }
+
+      setIsChatboxOpen(true);
     });
 
-    // marker
-    new maptilersdk.Marker({ color: "#FF0000" })
-      .setLngLat([pin.lng, pin.lat])
-      .addTo(map.current);
+    // initial marker
+    // new maptilersdk.Marker({ color: "#FF0000" })
+    //   .setLngLat([initialPin.lng, initialPin.lat])
+    //   .addTo(map.current);
 
     // add marker
-    const modelOrigin: [number, number] = [pin.lng, pin.lat];
+    const modelOrigin: [number, number] = [initialPin.lng, initialPin.lat];
     const modelAltitude = 0;
     const modelRotate = [Math.PI / 2, 0, 0];
 
@@ -151,11 +173,37 @@ export default function Map() {
     map.current.on("style.load", () => {
       map.current!.addLayer(customLayer as any);
     });
-  }, [pin.lng, pin.lat, zoom]);
+  }, [initialPin.lng, initialPin.lat, zoom]);
 
   return (
     <div className="relative w-full h-[calc(100vh-77px)]">
       <div ref={mapContainer} className="absolute w-full h-full" />
+      <AnimatePresence>
+        {isChatboxOpen && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg p-4"
+          >
+            <h2 className="text-xl font-bold mb-4">Coordinates Info</h2>
+            {selectedCoordinates && (
+              <p>
+                Latitude: {selectedCoordinates[1].toFixed(6)}
+                <br />
+                Longitude: {selectedCoordinates[0].toFixed(6)}
+              </p>
+            )}
+            <button
+              onClick={() => setIsChatboxOpen(false)}
+              className="mt-4 bg-red-500 text-white px-4 py-2 rounded"
+            >
+              Close
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
