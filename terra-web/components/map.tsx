@@ -22,7 +22,6 @@ export default function Map() {
   const zoom = 14;
   maptilersdk.config.apiKey = process.env
     .NEXT_PUBLIC_MAPTILER_API_KEY as string;
-  console.log(maptilersdk.config.apiKey);
 
   useEffect(() => {
     if (map.current) return; // stops map from intializing more than once
@@ -41,14 +40,17 @@ export default function Map() {
       antialias: true,
     });
 
+    // print clicked
     map.current.on("click", (e) => {
       console.log("Clicked coordinates:", e.lngLat.lng, e.lngLat.lat);
     });
 
+    // marker
     new maptilersdk.Marker({ color: "#FF0000" })
       .setLngLat([pin.lng, pin.lat])
       .addTo(map.current);
 
+    // add marker
     const modelOrigin: [number, number] = [pin.lng, pin.lat];
     const modelAltitude = 0;
     const modelRotate = [Math.PI / 2, 0, 0];
