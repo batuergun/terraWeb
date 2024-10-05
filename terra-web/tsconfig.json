@@ -18,7 +18,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "three/examples/jsm/loaders/GLTFLoader": ["./node_modules/@types/three/examples/jsm/loaders/GLTFLoader"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
