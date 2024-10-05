@@ -1,15 +1,16 @@
-'use client'
+"use client";
 
-import React, { useRef, useEffect } from 'react';
-import * as maptilersdk from '@maptiler/sdk';
+import React, { useRef, useEffect } from "react";
+import * as maptilersdk from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 
 export default function Map() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maptilersdk.Map | null>(null);
-  const tokyo = { lng: 139.753, lat: 35.6844 };
+  const pin = { lat: 41.3611847, lng: 36.1770237 };
   const zoom = 14;
-  maptilersdk.config.apiKey = process.env.NEXT_PUBLIC_MAPTILER_API_KEY as string;
+  maptilersdk.config.apiKey = process.env
+    .NEXT_PUBLIC_MAPTILER_API_KEY as string;
   console.log(maptilersdk.config.apiKey);
 
   useEffect(() => {
@@ -17,12 +18,26 @@ export default function Map() {
 
     map.current = new maptilersdk.Map({
       container: mapContainer.current!,
-      style: maptilersdk.MapStyle.STREETS,
-      center: [tokyo.lng, tokyo.lat],
-      zoom: zoom
+      style: maptilersdk.MapStyle.OUTDOOR,
+      center: [pin.lng, pin.lat],
+      zoom: zoom,
+      terrain: true,
+      terrainControl: true,
+      pitch: 60,
+      bearing: -100.86,
+      maxPitch: 85,
+      maxZoom: 14,
+      antialias: true
     });
 
-  }, [tokyo.lng, tokyo.lat, zoom]);
+    map.current.on("click", (e) => {
+      console.log("Clicked coordinates:", e.lngLat.lng, e.lngLat.lat);
+    });
+
+    new maptilersdk.Marker({color: "#FF0000"})
+      .setLngLat([pin.lng, pin.lat])
+      .addTo(map.current);
+  }, [pin.lng, pin.lat, zoom]);
 
   return (
     <div className="relative w-full h-[calc(100vh-77px)]">
