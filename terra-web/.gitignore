@@ -40,3 +40,6 @@ next-env.d.ts
 
 # sqlite
 *.db
+
+# DS_Store
+.DS_Store
