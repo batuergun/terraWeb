@@ -155,7 +155,20 @@ export default function Map() {
         clickMarkerRef.current.remove();
       }
 
-      clickMarkerRef.current = new maptilersdk.Marker({ color: "#0000FF" })
+      // Create a custom marker element
+      const el = document.createElement('div');
+      el.className = 'custom-marker';
+      el.style.width = '20px';
+      el.style.height = '20px';
+      el.style.borderRadius = '50%';
+      el.style.backgroundColor = '#FFFFFF';
+      el.style.border = '2px solid #000000'; // Black border
+      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)'; // Shadow for better visibility
+
+      // Create a new marker with the custom element
+      clickMarkerRef.current = new maptilersdk.Marker({
+        element: el
+      })
         .setLngLat([lng, lat])
         .addTo(map.current);
 
