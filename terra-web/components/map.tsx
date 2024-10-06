@@ -186,7 +186,7 @@ export default function Map() {
       rotateX: modelRotate[0],
       rotateY: modelRotate[1],
       rotateZ: modelRotate[2],
-      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits(),
+      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 10,
     };
 
     const customLayer: CustomLayerInterface = {
@@ -299,7 +299,7 @@ export default function Map() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg p-4"
+            className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg p-4 text-black"
           >
             <h2 className="text-xl font-bold mb-4">Coordinates Info</h2>
             {selectedCoordinates && (
