@@ -12,7 +12,6 @@ dask==2024.9.1
 fastapi==0.115.0
 fsspec==2024.9.0
 idna==3.10
-importlib_metadata==8.5.0
 locket==1.0.0
 numpy==2.1.2
 odc-geo==0.4.8
@@ -37,4 +36,3 @@ toolz==1.0.0
 typing_extensions==4.12.2
 tzdata==2024.2
 xarray==2024.9.0
-zipp==3.20.2
