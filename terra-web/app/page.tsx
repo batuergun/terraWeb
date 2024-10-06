@@ -21,7 +21,7 @@ export default function Home() {
 
       {/* Overlay */}
       <div
-        className={`absolute inset-7 bg-black flex flex-col items-center justify-center transition-opacity duration-[2000ms] z-50 ${
+        className={`absolute inset-0 bg-black flex flex-col items-center justify-center transition-opacity duration-[2000ms] z-50 ${
           showOverlay ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
