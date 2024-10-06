@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export async function fetchAgricultureData(lat: number, lng: number) {
   try {
-    const response = await axios.get('/api/agriculture-data', {
+    const response = await axios.post('/api/nvdi', {
       params: {
         lat,
         lng
