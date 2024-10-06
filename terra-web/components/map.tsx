@@ -7,6 +7,8 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { motion, AnimatePresence } from "framer-motion";
 
+import { fetchWeatherData, fetchAgricultureData } from "@/utils/dataFetchers";
+
 interface CustomLayerInterface
   extends Omit<maptilersdk.CustomLayerInterface, "render"> {
   camera?: THREE.Camera;
@@ -40,6 +42,8 @@ export default function Map() {
   const clickMarkerRef = useRef<maptilersdk.Marker | null>(null);
   const sensorMarkerRef = useRef<maptilersdk.Marker | null>(null);
   const [nearSensor, setNearSensor] = useState(false);
+  const [landSummary, setLandSummary] = useState<string | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
   useEffect(() => {
     if (map.current) return;
@@ -101,14 +105,20 @@ export default function Map() {
             sensorMarkerRef.current.setLngLat([data.longitude, data.latitude]);
             console.log("Existing sensor marker updated");
           } else {
-            sensorMarkerRef.current = new maptilersdk.Marker({ color: "#FF0000" })
+            sensorMarkerRef.current = new maptilersdk.Marker({
+              color: "#FF0000",
+            })
               .setLngLat([data.longitude, data.latitude])
               .addTo(map.current);
             console.log("New sensor marker added");
           }
         }
       } else {
-        console.error("Failed to fetch sensor data:", response.status, response.statusText);
+        console.error(
+          "Failed to fetch sensor data:",
+          response.status,
+          response.statusText
+        );
         setSensorData(null);
       }
     } catch (error) {
@@ -117,10 +127,13 @@ export default function Map() {
     }
   };
 
-  const handleMapClick = (e: maptilersdk.MapMouseEvent) => {
+  const handleMapClick = async (e: maptilersdk.MapMouseEvent) => {
     const { lng, lat } = e.lngLat;
     console.log("Map clicked. Coordinates:", lng, lat);
     setSelectedCoordinates([lng, lat]);
+    setIsChatboxOpen(true);
+    setIsLoadingSummary(true);
+    setLandSummary(null);
 
     if (map.current) {
       if (clickMarkerRef.current) {
@@ -131,11 +144,8 @@ export default function Map() {
         .setLngLat([lng, lat])
         .addTo(map.current);
 
-      console.log("Blue marker added at clicked location");
-
       // Check if click is within 10km of sensor
       if (sensorData) {
-        console.log("Checking distance to sensor...");
         const distance = getDistance(
           lat,
           lng,
@@ -148,10 +158,27 @@ export default function Map() {
       } else {
         console.log("No sensor data available");
       }
-    }
 
-    setIsChatboxOpen(true);
-    console.log("Chatbox opened");
+      try {
+        // Fetch weather and agriculture data
+        const weatherData = await fetchWeatherData(lat, lng);
+        const agricultureData = await fetchAgricultureData(lat, lng);
+
+        // Generate summary using GPT-4
+        const summary = await generateLandSummary(
+          lat,
+          lng,
+          weatherData,
+          agricultureData
+        );
+        setLandSummary(summary);
+      } catch (error) {
+        console.error("Error fetching data or generating summary:", error);
+        setLandSummary("Unable to generate land summary at this time.");
+      } finally {
+        setIsLoadingSummary(false);
+      }
+    }
   };
 
   useEffect(() => {
@@ -164,9 +191,7 @@ export default function Map() {
   }, [map.current, sensorData]);
 
   const add3DModel = () => {
-    console.log("Adding 3D model...");
     if (!map.current) {
-      console.log("Map not initialized, cannot add 3D model");
       return;
     }
 
@@ -272,14 +297,21 @@ export default function Map() {
     console.log("3D model layer added successfully");
   };
 
-  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const getDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ) => {
     const R = 6371; // Radius of the earth in km
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      Math.cos(deg2rad(lat1)) *
+        Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const d = R * c; // Distance in km
     return d;
@@ -290,7 +322,7 @@ export default function Map() {
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-77px)]">
+    <div className="relative w-full h-[calc(100vh-200px)]">
       <div ref={mapContainer} className="absolute w-full h-full" />
       <AnimatePresence>
         {isChatboxOpen && (
@@ -299,24 +331,8 @@ export default function Map() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg p-4 text-black"
+            className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg p-4 text-black overflow-y-auto"
           >
-            <h2 className="text-xl font-bold mb-4">Coordinates Info</h2>
-            {selectedCoordinates && (
-              <p>
-                Latitude: {selectedCoordinates[1].toFixed(6)}
-                <br />
-                Longitude: {selectedCoordinates[0].toFixed(6)}
-              </p>
-            )}
-            {nearSensor && sensorData && (
-              <div className="mt-4">
-                <h3 className="text-lg font-semibold">Nearby Sensor Data</h3>
-                <p>Temperature: {sensorData.temperature}°C</p>
-                <p>Humidity: {sensorData.humidity}%</p>
-                <p>Last updated: {new Date(sensorData.timestamp).toLocaleString()}</p>
-              </div>
-            )}
             <button
               onClick={() => {
                 setIsChatboxOpen(false);
@@ -326,6 +342,37 @@ export default function Map() {
             >
               Close
             </button>
+            <h3 className="text-xl font-bold mb-4">Land Summary</h3>
+            {selectedCoordinates && (
+              <p className="text-sm">
+                Latitude: {selectedCoordinates[1].toFixed(6)}
+                <br />
+                Longitude: {selectedCoordinates[0].toFixed(6)}
+              </p>
+            )}
+            <div className="mt-4">
+              <h3 className="text-lg font-bold">Farmer's Land Summary</h3>
+              {isLoadingSummary ? (
+                <p className="text-sm text-gray-500 animate-pulse font-semibold">
+                  Loading land summary...
+                </p>
+              ) : landSummary ? (
+                <p>{landSummary}</p>
+              ) : (
+                <p>Click on the map to generate a land summary.</p>
+              )}
+            </div>
+            {nearSensor && sensorData && (
+              <div className="mt-4">
+                <h3 className="text-lg font-bold">Nearby Sensor Data</h3>
+                <p>Temperature: {sensorData.temperature}°C</p>
+                <p>Humidity: {sensorData.humidity}%</p>
+                <p>
+                  Last updated:{" "}
+                  {new Date(sensorData.timestamp).toLocaleString()}
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -342,4 +389,30 @@ export default function Map() {
       </AnimatePresence>
     </div>
   );
+}
+export async function generateLandSummary(
+  lat: number,
+  lng: number,
+  weatherData: any,
+  agricultureData: any
+) {
+  try {
+    const response = await fetch("/api/land-summary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ lat, lng, weatherData, agricultureData }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate land summary");
+    }
+
+    const data = await response.json();
+    return data.summary;
+  } catch (error) {
+    console.error("Error generating land summary:", error);
+    return "Unable to generate land summary at this time.";
+  }
 }
