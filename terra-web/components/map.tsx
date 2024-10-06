@@ -15,13 +15,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 
 import { fetchAgricultureData } from "@/utils/dataFetchers";
 
-interface CustomLayerInterface
-  extends Omit<maptilersdk.CustomLayerInterface, "render"> {
+interface CustomLayerInterface extends maptilersdk.CustomLayerInterface {
   camera?: THREE.Camera;
   scene?: THREE.Scene;
   renderer?: THREE.WebGLRenderer;
   map?: maptilersdk.Map;
-  render(gl: WebGLRenderingContext, matrix: number[] | Float32Array): void;
 }
 
 export type SensorData = {
@@ -59,163 +57,6 @@ export default function Map() {
     { role: 'assistant', content: 'Hello! How can I help you with information about this land?' },
   ]);
   const [input, setInput] = useState('');
-
-  useEffect(() => {
-    if (map.current) return;
-
-    console.log("Initializing map...");
-
-    map.current = new maptilersdk.Map({
-      container: mapContainer.current!,
-      style: maptilersdk.MapStyle.SATELLITE,
-      center: [initialPin.lng, initialPin.lat],
-      zoom: zoom,
-      terrain: true,
-      terrainControl: true,
-      pitch: 60,
-      bearing: -100.86,
-      maxPitch: 85,
-      maxZoom: 30,
-      antialias: true,
-    });
-
-    console.log("Map instance created");
-
-    map.current.on("load", () => {
-      console.log("Map loaded event fired");
-      setMapLoaded(true);
-      fetchSensorData();
-      add3DModel();
-    });
-
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (sensorData) {
-      console.log("Sensor data updated:", sensorData);
-    }
-  }, [sensorData]);
-
-  const fetchSensorData = async () => {
-    console.log("Fetching sensor data...");
-    try {
-      const response = await fetch("/api/sensor-data", {
-        headers: {
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_TOKEN}`,
-        },
-      });
-      if (response.ok) {
-        const data: SensorData = await response.json();
-        console.log("Sensor data fetched:", data);
-        setSensorData(data);
-
-        if (map.current && data.latitude && data.longitude) {
-          if (sensorMarkerRef.current) {
-            sensorMarkerRef.current.setLngLat([data.longitude, data.latitude]);
-            console.log("Existing sensor marker updated");
-          } else {
-            sensorMarkerRef.current = new maptilersdk.Marker({
-              color: "#FF0000",
-            })
-              .setLngLat([data.longitude, data.latitude])
-              .addTo(map.current);
-            console.log("New sensor marker added");
-          }
-        }
-      } else {
-        console.error(
-          "Failed to fetch sensor data:",
-          response.status,
-          response.statusText
-        );
-        setSensorData(null);
-      }
-    } catch (error) {
-      console.error("Error fetching sensor data:", error);
-      setSensorData(null);
-    }
-  };
-
-  const handleMapClick = async (e: maptilersdk.MapMouseEvent) => {
-    const { lng, lat } = e.lngLat;
-    console.log("Map clicked. Coordinates:", lng, lat);
-    setSelectedCoordinates([lng, lat]);
-    setIsChatboxOpen(true);
-    setIsLoadingSummary(true);
-    setLandSummary(null);
-
-    if (map.current) {
-      if (clickMarkerRef.current) {
-        clickMarkerRef.current.remove();
-      }
-
-      // Create a custom marker element
-      const el = document.createElement('div');
-      el.className = 'custom-marker';
-      el.style.width = '20px';
-      el.style.height = '20px';
-      el.style.borderRadius = '50%';
-      el.style.backgroundColor = '#FFFFFF';
-      el.style.border = '2px solid #000000'; // Black border
-      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)'; // Shadow for better visibility
-
-      // Create a new marker with the custom element
-      clickMarkerRef.current = new maptilersdk.Marker({
-        element: el
-      })
-        .setLngLat([lng, lat])
-        .addTo(map.current);
-
-      // Check if click is within 10km of sensor
-      if (sensorData) {
-        const distance = getDistance(
-          lat,
-          lng,
-          sensorData.latitude,
-          sensorData.longitude
-        );
-        console.log(`Distance to sensor: ${distance.toFixed(2)} km`);
-        setNearSensor(distance <= 10);
-        console.log(`Near sensor: ${distance <= 10}`);
-      } else {
-        console.log("No sensor data available");
-      }
-
-      try {
-        // Fetch terrain and land cover data
-        const agricultureData = await fetchAgricultureData(lat, lng);
-
-        // Generate summary using GPT-4
-        const summary = await generateLandSummary(
-          lat,
-          lng,
-          agricultureData,
-          sensorData
-        );
-        setLandSummary(summary);
-      } catch (error) {
-        console.error("Error fetching data or generating summary:", error);
-        setLandSummary("Unable to generate land summary at this time.");
-      } finally {
-        setIsLoadingSummary(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (map.current) {
-      map.current.on("click", handleMapClick);
-      return () => {
-        map.current?.off("click", handleMapClick);
-      };
-    }
-  }, [map.current, sensorData]);
 
   const add3DModel = useCallback(() => {
     if (!map.current || !is3DModelEnabled) {
@@ -363,21 +204,94 @@ export default function Map() {
       },
     };
 
-    map.current.addLayer(customLayer as any);
+    // TODO: Find a more specific type for the custom layer
+    map.current.addLayer(customLayer);
     console.log("3D model layer added successfully");
   }, [is3DModelEnabled, initialPin.lat, initialPin.lng]);
 
   useEffect(() => {
-    if (mapLoaded && is3DModelEnabled) {
-      const timer = setTimeout(() => {
-        add3DModel();
-      }, 2000); // 2 seconds delay
+    if (map.current) return;
 
-      return () => clearTimeout(timer);
+    console.log("Initializing map...");
+
+    map.current = new maptilersdk.Map({
+      container: mapContainer.current!,
+      style: maptilersdk.MapStyle.SATELLITE,
+      center: [initialPin.lng, initialPin.lat],
+      zoom: zoom,
+      terrain: true,
+      terrainControl: true,
+      pitch: 60,
+      bearing: -100.86,
+      maxPitch: 85,
+      maxZoom: 30,
+      antialias: true,
+    });
+
+    console.log("Map instance created");
+
+    map.current.on("load", () => {
+      console.log("Map loaded event fired");
+      setMapLoaded(true);
+      fetchSensorData();
+      add3DModel();
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, [initialPin.lng, initialPin.lat, add3DModel]);
+
+  useEffect(() => {
+    if (sensorData) {
+      console.log("Sensor data updated:", sensorData);
     }
-  }, [mapLoaded, is3DModelEnabled, add3DModel]);
+  }, [sensorData]);
 
-  const getDistance = (
+  const fetchSensorData = async () => {
+    console.log("Fetching sensor data...");
+    try {
+      const response = await fetch("/api/sensor-data", {
+        headers: {
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_TOKEN}`,
+        },
+      });
+      if (response.ok) {
+        const data: SensorData = await response.json();
+        console.log("Sensor data fetched:", data);
+        setSensorData(data);
+
+        if (map.current && data.latitude && data.longitude) {
+          if (sensorMarkerRef.current) {
+            sensorMarkerRef.current.setLngLat([data.longitude, data.latitude]);
+            console.log("Existing sensor marker updated");
+          } else {
+            sensorMarkerRef.current = new maptilersdk.Marker({
+              color: "#FF0000",
+            })
+              .setLngLat([data.longitude, data.latitude])
+              .addTo(map.current);
+            console.log("New sensor marker added");
+          }
+        }
+      } else {
+        console.error(
+          "Failed to fetch sensor data:",
+          response.status,
+          response.statusText
+        );
+        setSensorData(null);
+      }
+    } catch (error) {
+      console.error("Error fetching sensor data:", error);
+      setSensorData(null);
+    }
+  };
+
+  const getDistance = useCallback((
     lat1: number,
     lon1: number,
     lat2: number,
@@ -395,7 +309,94 @@ export default function Map() {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const d = R * c; // Distance in km
     return d;
-  };
+  }, []);
+
+  const handleMapClick = useCallback(async (e: maptilersdk.MapMouseEvent) => {
+    const { lng, lat } = e.lngLat;
+    console.log("Map clicked. Coordinates:", lng, lat);
+    setSelectedCoordinates([lng, lat]);
+    setIsChatboxOpen(true);
+    setIsLoadingSummary(true);
+    setLandSummary(null);
+
+    if (map.current) {
+      if (clickMarkerRef.current) {
+        clickMarkerRef.current.remove();
+      }
+
+      // Create a custom marker element
+      const el = document.createElement('div');
+      el.className = 'custom-marker';
+      el.style.width = '20px';
+      el.style.height = '20px';
+      el.style.borderRadius = '50%';
+      el.style.backgroundColor = '#FFFFFF';
+      el.style.border = '2px solid #000000'; // Black border
+      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)'; // Shadow for better visibility
+
+      // Create a new marker with the custom element
+      clickMarkerRef.current = new maptilersdk.Marker({
+        element: el
+      })
+        .setLngLat([lng, lat])
+        .addTo(map.current);
+
+      // Check if click is within 10km of sensor
+      if (sensorData) {
+        const distance = getDistance(
+          lat,
+          lng,
+          sensorData.latitude,
+          sensorData.longitude
+        );
+        console.log(`Distance to sensor: ${distance.toFixed(2)} km`);
+        setNearSensor(distance <= 10);
+        console.log(`Near sensor: ${distance <= 10}`);
+      } else {
+        console.log("No sensor data available");
+      }
+
+      try {
+        // Fetch terrain and land cover data
+        const agricultureData = await fetchAgricultureData(lat, lng);
+
+        // Generate summary using GPT-4
+        const summary = await generateLandSummary(
+          lat,
+          lng,
+          agricultureData,
+          sensorData
+        );
+        setLandSummary(summary);
+      } catch (error) {
+        console.error("Error fetching data or generating summary:", error);
+        setLandSummary("Unable to generate land summary at this time.");
+      } finally {
+        setIsLoadingSummary(false);
+      }
+    }
+  }, [sensorData, map, setSelectedCoordinates, setIsChatboxOpen, setIsLoadingSummary, setLandSummary, clickMarkerRef, setNearSensor, getDistance, fetchAgricultureData, generateLandSummary]);
+
+  useEffect(() => {
+    if (map.current) {
+      map.current.on("click", handleMapClick);
+      return () => {
+        if (map.current) {
+          map.current.off("click", handleMapClick);
+        }
+      };
+    }
+  }, [handleMapClick]);
+
+  useEffect(() => {
+    if (mapLoaded && is3DModelEnabled) {
+      const timer = setTimeout(() => {
+        add3DModel();
+      }, 2000); // 2 seconds delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [mapLoaded, is3DModelEnabled, add3DModel]);
 
   const deg2rad = (deg: number) => {
     return deg * (Math.PI / 180);
@@ -480,7 +481,7 @@ export default function Map() {
                 )}
                 
                 <div className="mb-4">
-                  <h3 className="text-lg font-bold mb-1 text-gray-800">Farmer's Land Summary</h3>
+                  <h3 className="text-lg font-bold mb-1 text-gray-800">Land Summary</h3>
                   {isLoadingSummary ? (
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-full" />
@@ -619,7 +620,7 @@ export default function Map() {
 export async function generateLandSummary(
   lat: number,
   lng: number,
-  agricultureData: any,
+  agricultureData: Record<string, unknown>,
   sensorData: SensorData | null
 ) {
   try {
