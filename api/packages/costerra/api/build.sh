@@ -1,5 +1,8 @@
 #!/bin/bash
 
-python3 -m venv venv
+set -e
+
+virtualenv venv
 source venv/bin/activate
 pip install -r requirements.txt
+deactivate
