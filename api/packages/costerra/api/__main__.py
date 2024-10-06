@@ -1,3 +1,5 @@
+import os
+import asyncio
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import odc.stac
@@ -11,6 +13,10 @@ class NDVIRequest(BaseModel):
     longitude: float = -121.5
     buffer: float = 1
     year: str = '2021'
+
+def verify_api_key(provided_key):
+    expected_key = os.environ.get('API_KEY')
+    return provided_key == expected_key
 
 async def get_ndvi(request: NDVIRequest):
     try:
@@ -101,4 +107,32 @@ def main(params):
     dict
         The response from the function.
     """
-    return get_ndvi(params)
+    # Check for API key
+    api_key = params.get('api_key')
+    if not verify_api_key(api_key):
+        return {
+            "statusCode": 403,
+            "body": "Invalid API key"
+        }
+
+    # If API key is valid, proceed with the function
+    try:
+        request = NDVIRequest(**params)
+        # Use asyncio to run the async function
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(get_ndvi(request))
+        return {
+            "statusCode": 200,
+            "body": result.body.decode(),  # Assuming JSONResponse returns bytes
+            "headers": {
+                "Content-Type": "application/json"
+            }
+        }
+    except Exception as e:
+        print(f"Error in main function: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "statusCode": 500,
+            "body": "Internal server error"
+        }
