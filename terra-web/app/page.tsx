@@ -34,7 +34,7 @@ export default function Home() {
             priority
           />
         </div>
-        <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+        <div className="w-14 h-14 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
       </div>
 
       {/* Top middle logo */}

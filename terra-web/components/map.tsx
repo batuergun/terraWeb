@@ -7,6 +7,11 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { X, Send, MessageCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 import { fetchAgricultureData } from "@/utils/dataFetchers";
 
@@ -49,6 +54,11 @@ export default function Map() {
   const [modelLoadingError, setModelLoadingError] = useState<string | null>(
     null
   );
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: 'Hello! How can I help you with information about this land?' },
+  ]);
+  const [input, setInput] = useState('');
 
   useEffect(() => {
     if (map.current) return;
@@ -378,6 +388,39 @@ export default function Map() {
     return deg * (Math.PI / 180);
   };
 
+  const handleSend = async () => {
+    if (input.trim()) {
+      const userMessage = { role: 'user', content: input };
+      setMessages(prev => [...prev, userMessage]);
+      setInput('');
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [...messages, userMessage],
+            landSummary,
+            selectedCoordinates,
+            sensorData,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get chat response');
+        }
+
+        const data = await response.json();
+        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      } catch (error) {
+        console.error('Error in chat:', error);
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
+      }
+    }
+  };
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="absolute w-full h-full" />
@@ -436,8 +479,8 @@ export default function Map() {
                       <p className="text-gray-700">{landSummary}</p>
                       <button
                         onClick={() => {
-                          // Implement your "Ask More" functionality here
-                          console.log("Ask More clicked");
+                          setIsChatOpen(true);
+                          console.log("Chat opened");
                         }}
                         className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
                       >
@@ -488,6 +531,75 @@ export default function Map() {
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {isChatOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <Card className="w-full max-w-lg shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <h2 className="text-2xl font-semibold">Chat about this land</h2>
+                <Button variant="ghost" size="icon" onClick={() => setIsChatOpen(false)} aria-label="Close chat">
+                  <X className="h-6 w-6" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px] w-full pr-4">
+                  {messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`mb-4 ${
+                        message.role === 'user' ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      <div
+                        className={`inline-block rounded-lg px-4 py-2 ${
+                          message.role === 'user'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        {message.content}
+                      </div>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </CardContent>
+              <CardFooter>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleSend()
+                  }}
+                  className="flex w-full items-center space-x-2"
+                >
+                  <Input
+                    id="message"
+                    placeholder="Type your message..."
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button type="submit" size="icon" aria-label="Send message">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <Button
+        className="fixed bottom-4 right-4 rounded-full p-4 z-40"
+        onClick={() => setIsChatOpen(true)}
+        aria-label="Open chat"
+      >
+        <MessageCircle className="h-6 w-6" />
+      </Button>
     </div>
   );
 }
