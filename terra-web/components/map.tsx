@@ -6,6 +6,7 @@ import "@maptiler/sdk/dist/maptiler-sdk.css";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { motion, AnimatePresence } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { fetchAgricultureData } from "@/utils/dataFetchers";
 
@@ -56,7 +57,7 @@ export default function Map() {
 
     map.current = new maptilersdk.Map({
       container: mapContainer.current!,
-      style: maptilersdk.MapStyle.OUTDOOR,
+      style: maptilersdk.MapStyle.SATELLITE,
       center: [initialPin.lng, initialPin.lat],
       zoom: zoom,
       terrain: true,
@@ -378,7 +379,7 @@ export default function Map() {
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-200px)]">
+    <div className="relative w-full h-full">
       <div ref={mapContainer} className="absolute w-full h-full" />
       {modelLoadingError && (
         <div className="absolute top-0 left-0 bg-red-500 text-white p-2 m-2 rounded">
@@ -388,52 +389,91 @@ export default function Map() {
       <AnimatePresence>
         {isChatboxOpen && (
           <motion.div
-            initial={{ x: "100%" }}
+            initial={{ x: "-100%" }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
+            exit={{ x: "-100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg p-4 text-black overflow-y-auto"
+            className="absolute top-4 left-4 bottom-4 w-80 bg-white shadow-lg rounded-2xl overflow-hidden"
           >
-            <button
-              onClick={() => {
-                setIsChatboxOpen(false);
-                console.log("Chatbox closed");
-              }}
-              className="mt-4 bg-red-500 text-white px-4 py-2 rounded"
-            >
-              Close
-            </button>
-            <h3 className="text-xl font-bold mb-4">Land Summary</h3>
-            {selectedCoordinates && (
-              <p className="text-sm">
-                Latitude: {selectedCoordinates[1].toFixed(6)}
-                <br />
-                Longitude: {selectedCoordinates[0].toFixed(6)}
-              </p>
-            )}
-            <div className="mt-4">
-              <h3 className="text-lg font-bold">Farmer's Land Summary</h3>
-              {isLoadingSummary ? (
-                <p className="text-sm text-gray-500 animate-pulse font-semibold">
-                  Loading land summary...
-                </p>
-              ) : landSummary ? (
-                <p>{landSummary}</p>
-              ) : (
-                <p>Click on the map to generate a land summary.</p>
-              )}
-            </div>
-            {nearSensor && sensorData && (
-              <div className="mt-4">
-                <h3 className="text-lg font-bold">Nearby Sensor Data</h3>
-                <p>Temperature: {sensorData.temperature}°C</p>
-                <p>Humidity: {sensorData.humidity}%</p>
-                <p>
-                  Last updated:{" "}
-                  {new Date(sensorData.timestamp).toLocaleString()}
-                </p>
+            <div className="h-full flex flex-col">
+              <div className="flex justify-between items-center p-4 border-b">
+                <h2 className="text-2xl font-bold text-gray-800">Land Information</h2>
+                <button
+                  onClick={() => {
+                    setIsChatboxOpen(false);
+                    console.log("Chatbox closed");
+                  }}
+                  className="text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-            )}
+              
+              <div className="flex-grow overflow-y-auto p-4">
+                {selectedCoordinates && (
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">Selected Location</h3>
+                    <p className="text-sm text-gray-700">
+                      Latitude: {selectedCoordinates[1].toFixed(6)}
+                      <br />
+                      Longitude: {selectedCoordinates[0].toFixed(6)}
+                    </p>
+                  </div>
+                )}
+                
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-1 text-gray-800">Farmer's Land Summary</h3>
+                  {isLoadingSummary ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                      <Skeleton className="h-4 w-4/6" />
+                    </div>
+                  ) : landSummary ? (
+                    <>
+                      <p className="text-gray-700">{landSummary}</p>
+                      <button
+                        onClick={() => {
+                          // Implement your "Ask More" functionality here
+                          console.log("Ask More clicked");
+                        }}
+                        className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+                      >
+                        Ask More
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-gray-700">Click on the map to generate a land summary.</p>
+                  )}
+                </div>
+                
+                {nearSensor && sensorData && (
+                  <div className="mt-4">
+                    <h3 className="text-lg font-semibold mb-2 text-gray-800">Nearby Sensor Data</h3>
+                    <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-500">Temperature</span>
+                          <span className="text-sm font-semibold text-gray-900">{sensorData.temperature}°C</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-500">Humidity</span>
+                          <span className="text-sm font-semibold text-gray-900">{sensorData.humidity}%</span>
+                        </div>
+                        <div className="pt-2 border-t border-gray-200">
+                          <span className="text-xs text-gray-500">Last updated:</span>
+                          <span className="text-xs font-medium text-gray-900 ml-1">
+                            {new Date(sensorData.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -444,7 +484,7 @@ export default function Map() {
             exit={{ opacity: 0 }}
             className="absolute inset-0 flex items-center justify-center bg-white"
           >
-            <p className="text-2xl font-bold">Loading map...</p>
+            <p className="text-2xl font-bold text-gray-800">Loading map...</p>
           </motion.div>
         )}
       </AnimatePresence>
