@@ -2,7 +2,7 @@
 
 set -e
 
-virtualenv virtualenv
-source virtualenv/bin/activate
+virtualenv venv
+source venv/bin/activate
 pip install -r requirements.txt
 deactivate

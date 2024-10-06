@@ -1,5 +1,3 @@
-environment:
-  API_KEY: ${API_KEY}
 packages:
   - name: costerra
     actions:
