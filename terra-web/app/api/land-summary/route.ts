@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       Agriculture data: ${JSON.stringify(agricultureData)}
       
       Please include insights on climate, soil conditions, suitable crops, and any relevant farming recommendations. Make it concise and to the point. Explain it as your target audiance is a farmer.
-      At the end of your response, suggest suitable products and what kind should be avoided.
+      At the end of your response, suggest suitable crops and what kind should be avoided as a list.
       `;
 
     const response = await openai.chat.completions.create({

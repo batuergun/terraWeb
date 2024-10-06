@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import * as maptilersdk from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { fetchWeatherData, fetchAgricultureData } from "@/utils/dataFetchers";
+import { fetchTerrainData, fetchAgricultureData, fetchSensorData } from "@/utils/dataFetchers";
 
 interface CustomLayerInterface
   extends Omit<maptilersdk.CustomLayerInterface, "render"> {
@@ -44,6 +44,8 @@ export default function Map() {
   const [nearSensor, setNearSensor] = useState(false);
   const [landSummary, setLandSummary] = useState<string | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+  const [is3DModelEnabled, setIs3DModelEnabled] = useState(true);
+  const [modelLoadingError, setModelLoadingError] = useState<string | null>(null);
 
   useEffect(() => {
     if (map.current) return;
@@ -160,15 +162,15 @@ export default function Map() {
       }
 
       try {
-        // Fetch weather and agriculture data
-        const weatherData = await fetchWeatherData(lat, lng);
+        // Fetch terrain and land cover data
+        const terrainData = await fetchTerrainData(lat, lng);
         const agricultureData = await fetchAgricultureData(lat, lng);
 
         // Generate summary using GPT-4
         const summary = await generateLandSummary(
           lat,
           lng,
-          weatherData,
+          terrainData,
           agricultureData
         );
         setLandSummary(summary);
@@ -190,8 +192,8 @@ export default function Map() {
     }
   }, [map.current, sensorData]);
 
-  const add3DModel = () => {
-    if (!map.current) {
+  const add3DModel = useCallback(() => {
+    if (!map.current || !is3DModelEnabled) {
       return;
     }
 
@@ -211,7 +213,7 @@ export default function Map() {
       rotateX: modelRotate[0],
       rotateY: modelRotate[1],
       rotateZ: modelRotate[2],
-      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 10,
+      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 20,
     };
 
     const customLayer: CustomLayerInterface = {
@@ -223,38 +225,64 @@ export default function Map() {
         this.camera = new THREE.Camera();
         this.scene = new THREE.Scene();
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff);
-        directionalLight.position.set(0, -70, 100).normalize();
-        this.scene.add(directionalLight);
-
-        const directionalLight2 = new THREE.DirectionalLight(0xffffff);
-        directionalLight2.position.set(0, 70, 100).normalize();
-        this.scene.add(directionalLight2);
+        // Remove ambient and directional lights
+        // const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        // this.scene.add(ambientLight);
+        // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        // directionalLight.position.set(0, -70, 100).normalize();
+        // this.scene.add(directionalLight);
 
         const loader = new GLTFLoader();
         loader.load(
-          "https://docs.maptiler.com/sdk-js/assets/34M_17/34M_17.gltf",
+          "model.gltf",
           (gltf) => {
             if (gltf && gltf.scene) {
+              // Create a matte orange material
+              const matteOrangeMaterial = new THREE.MeshBasicMaterial({
+                color: 0xFF8C00, // Deep orange color
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.9,
+              });
+
+              // Apply the material to all meshes in the model
+              gltf.scene.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  child.material = matteOrangeMaterial;
+                }
+              });
+
               this.scene!.add(gltf.scene);
             }
+          },
+          undefined,
+          (error) => {
+            console.error("Error loading 3D model:", error);
+            setModelLoadingError("Failed to load 3D model. Falling back to 2D map.");
+            setIs3DModelEnabled(false);
           }
         );
 
         this.map = map;
 
-        this.renderer = new THREE.WebGLRenderer({
-          canvas: map.getCanvas(),
-          context: gl,
-          antialias: true,
-        });
-
-        this.renderer.autoClear = false;
+        try {
+          this.renderer = new THREE.WebGLRenderer({
+            canvas: map.getCanvas(),
+            context: gl,
+            antialias: true,
+          });
+          this.renderer.autoClear = false;
+        } catch (error) {
+          console.error("Failed to create WebGL renderer:", error);
+          setModelLoadingError("WebGL rendering not supported. Falling back to 2D map.");
+          setIs3DModelEnabled(false);
+        }
       },
-      render: function (
-        gl: WebGLRenderingContext,
-        matrix: number[] | Float32Array
-      ) {
+      render: function (gl: WebGLRenderingContext, matrix: number[] | Float32Array) {
+        if (!this.camera || !this.scene || !this.renderer || !this.map) {
+          return;
+        }
+
         const rotationX = new THREE.Matrix4().makeRotationAxis(
           new THREE.Vector3(1, 0, 0),
           modelTransform.rotateX
@@ -286,16 +314,34 @@ export default function Map() {
           .multiply(rotationY)
           .multiply(rotationZ);
 
-        this.camera!.projectionMatrix = m.multiply(l);
-        this.renderer!.state.reset();
-        this.renderer!.render(this.scene!, this.camera!);
-        this.map!.triggerRepaint();
+        this.camera.projectionMatrix = m.multiply(l);
+        this.renderer.state.reset();
+
+        try {
+          this.renderer.render(this.scene, this.camera);
+        } catch (error) {
+          console.error("Error rendering 3D model:", error);
+          setModelLoadingError("Error rendering 3D model. Falling back to 2D map.");
+          setIs3DModelEnabled(false);
+        }
+
+        this.map.triggerRepaint();
       },
     };
 
     map.current.addLayer(customLayer as any);
     console.log("3D model layer added successfully");
-  };
+  }, [is3DModelEnabled, initialPin.lat, initialPin.lng]);
+
+  useEffect(() => {
+    if (mapLoaded && is3DModelEnabled) {
+      const timer = setTimeout(() => {
+        add3DModel();
+      }, 2000); // 2 seconds delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [mapLoaded, is3DModelEnabled, add3DModel]);
 
   const getDistance = (
     lat1: number,
@@ -324,6 +370,11 @@ export default function Map() {
   return (
     <div className="relative w-full h-[calc(100vh-200px)]">
       <div ref={mapContainer} className="absolute w-full h-full" />
+      {modelLoadingError && (
+        <div className="absolute top-0 left-0 bg-red-500 text-white p-2 m-2 rounded">
+          {modelLoadingError}
+        </div>
+      )}
       <AnimatePresence>
         {isChatboxOpen && (
           <motion.div
