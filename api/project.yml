@@ -4,4 +4,4 @@ packages:
   - name: costerra
     actions:
       - name: api
-        runtime: 'python:default'
+        runtime: 'python:3.11'
