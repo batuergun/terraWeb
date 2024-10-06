@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { fetchTerrainData, fetchAgricultureData, fetchSensorData } from "@/utils/dataFetchers";
+import { fetchAgricultureData } from "@/utils/dataFetchers";
 
 interface CustomLayerInterface
   extends Omit<maptilersdk.CustomLayerInterface, "render"> {
@@ -18,7 +18,7 @@ interface CustomLayerInterface
   render(gl: WebGLRenderingContext, matrix: number[] | Float32Array): void;
 }
 
-type SensorData = {
+export type SensorData = {
   temperature: number;
   humidity: number;
   latitude: number;
@@ -45,7 +45,9 @@ export default function Map() {
   const [landSummary, setLandSummary] = useState<string | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [is3DModelEnabled, setIs3DModelEnabled] = useState(true);
-  const [modelLoadingError, setModelLoadingError] = useState<string | null>(null);
+  const [modelLoadingError, setModelLoadingError] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (map.current) return;
@@ -163,15 +165,14 @@ export default function Map() {
 
       try {
         // Fetch terrain and land cover data
-        const terrainData = await fetchTerrainData(lat, lng);
         const agricultureData = await fetchAgricultureData(lat, lng);
 
         // Generate summary using GPT-4
         const summary = await generateLandSummary(
           lat,
           lng,
-          terrainData,
-          agricultureData
+          agricultureData,
+          sensorData
         );
         setLandSummary(summary);
       } catch (error) {
@@ -239,7 +240,7 @@ export default function Map() {
             if (gltf && gltf.scene) {
               // Create a matte orange material
               const matteOrangeMaterial = new THREE.MeshBasicMaterial({
-                color: 0xFF8C00, // Deep orange color
+                color: 0xff8c00, // Deep orange color
                 side: THREE.DoubleSide,
                 transparent: true,
                 opacity: 0.9,
@@ -258,7 +259,9 @@ export default function Map() {
           undefined,
           (error) => {
             console.error("Error loading 3D model:", error);
-            setModelLoadingError("Failed to load 3D model. Falling back to 2D map.");
+            setModelLoadingError(
+              "Failed to load 3D model. Falling back to 2D map."
+            );
             setIs3DModelEnabled(false);
           }
         );
@@ -274,11 +277,16 @@ export default function Map() {
           this.renderer.autoClear = false;
         } catch (error) {
           console.error("Failed to create WebGL renderer:", error);
-          setModelLoadingError("WebGL rendering not supported. Falling back to 2D map.");
+          setModelLoadingError(
+            "WebGL rendering not supported. Falling back to 2D map."
+          );
           setIs3DModelEnabled(false);
         }
       },
-      render: function (gl: WebGLRenderingContext, matrix: number[] | Float32Array) {
+      render: function (
+        gl: WebGLRenderingContext,
+        matrix: number[] | Float32Array
+      ) {
         if (!this.camera || !this.scene || !this.renderer || !this.map) {
           return;
         }
@@ -321,7 +329,9 @@ export default function Map() {
           this.renderer.render(this.scene, this.camera);
         } catch (error) {
           console.error("Error rendering 3D model:", error);
-          setModelLoadingError("Error rendering 3D model. Falling back to 2D map.");
+          setModelLoadingError(
+            "Error rendering 3D model. Falling back to 2D map."
+          );
           setIs3DModelEnabled(false);
         }
 
@@ -444,8 +454,8 @@ export default function Map() {
 export async function generateLandSummary(
   lat: number,
   lng: number,
-  weatherData: any,
-  agricultureData: any
+  agricultureData: any,
+  sensorData: SensorData | null
 ) {
   try {
     const response = await fetch("/api/land-summary", {
@@ -453,7 +463,7 @@ export async function generateLandSummary(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ lat, lng, weatherData, agricultureData }),
+      body: JSON.stringify({ lat, lng, agricultureData, sensorData }),
     });
 
     if (!response.ok) {

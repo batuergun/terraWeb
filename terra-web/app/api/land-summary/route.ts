@@ -7,11 +7,14 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const { lat, lng, weatherData, agricultureData } = await request.json();
+    const { lat, lng, agricultureData, sensorData } = await request.json();
+
+    console.log("sensorData", sensorData);
+    console.log("agricultureData", agricultureData);
 
     const prompt = `Provide a brief summary of a farmer's land based on the following information:
       Location: Latitude ${lat}, Longitude ${lng}
-      Weather data: ${JSON.stringify(weatherData)}
+      Nearby Sensor data: ${JSON.stringify(sensorData)}
       Agriculture data: ${JSON.stringify(agricultureData)}
       
       Please include insights on climate, soil conditions, suitable crops, and any relevant farming recommendations. Make it concise and to the point. Explain it as your target audiance is a farmer.
