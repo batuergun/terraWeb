@@ -43,8 +43,6 @@ async def get_ndvi(request: NDVIRequest):
             )
             items[name] = search.get_all_items()[0]
 
-        print(items)
-
         data = odc.stac.load(
             items.values(),
             crs="EPSG:3857",
@@ -55,7 +53,6 @@ async def get_ndvi(request: NDVIRequest):
 
         raster = items["January"].assets["500m_16_days_NDVI"].extra_fields["raster:bands"]
         data = data["500m_16_days_NDVI"] * raster[0]["scale"]
-        print(data)
 
         # Process NDVI data
         ndvi_stats = {}
