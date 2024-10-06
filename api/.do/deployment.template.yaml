@@ -1,0 +1,13 @@
+alerts:
+- rule: DEPLOYMENT_FAILED
+- rule: DOMAIN_FAILED
+functions:
+- github:
+    branch: main
+    deploy_on_push: true
+    repo: batuergun/terraWeb
+  name: costerra-api
+  routes:
+  - path: /api
+  source_dir: /api
+name: api

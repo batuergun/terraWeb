@@ -1,4 +1,3 @@
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import odc.stac
@@ -6,7 +5,6 @@ import planetary_computer
 import pystac_client
 import numpy as np
 import pandas as pd
-app = FastAPI()
 
 class NDVIRequest(BaseModel):
     latitude: float = 38.6
@@ -14,7 +12,6 @@ class NDVIRequest(BaseModel):
     buffer: float = 1
     year: str = '2021'
 
-@app.post("/get_ndvi")
 async def get_ndvi(request: NDVIRequest):
     try:
         catalog = pystac_client.Client.open(
@@ -91,8 +88,17 @@ async def get_ndvi(request: NDVIRequest):
         print(f"Error in get_ndvi: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+def main(params):
+    """
+    This is the main function that is called when the API is called.
+
+    Parameters:
+    params: dict
+        The parameters passed to the function.
+
+    Returns:
+    dict
+        The response from the function.
+    """
+    return get_ndvi(params)
