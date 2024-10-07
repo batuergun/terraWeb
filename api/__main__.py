@@ -8,8 +8,13 @@ import pystac_client
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Depends
+from typing import Dict, Any
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI()
+
+# Initialize Prometheus instrumentation
+Instrumentator().instrument(app).expose(app)
 
 class NDVIRequest(BaseModel):
     latitude: float = 38.6
@@ -108,6 +113,10 @@ async def get_ndvi(request: NDVIRequest):
         print(f"Error in get_ndvi: {str(e)}")
         import traceback
         traceback.print_exc()
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 def main(params):
     """
