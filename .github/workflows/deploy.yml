@@ -24,7 +24,7 @@ jobs:
       with:
         context: ./api
         push: true
-        tags: batuergun/terraweb:${{ github.sha }}
+        tags: yourdockerhubusername/costerra-api:${{ github.sha }}
 
     - name: Deploy to Server
       uses: appleboy/ssh-action@master
@@ -33,15 +33,17 @@ jobs:
         username: github-deploy
         key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
         script: |
-          if [ ! -d "/opt/costerra" ]; then
-            mkdir -p /opt/costerra
-            cd /opt/costerra
+          if [ ! -d "/opt/terraweb" ]; then
+            mkdir -p /opt/terraweb
+            cd /opt/terraweb
             git clone https://github.com/batuergun/terraweb.git .
           else
-            cd /opt/costerra
+            cd /opt/terraweb
             git fetch --all
             git reset --hard origin/main
           fi
           echo "DOCKER_IMAGE=batuergun/terraweb:${{ github.sha }}" > .env
           sudo docker-compose pull
           sudo docker-compose up -d
+
+          
