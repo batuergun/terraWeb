@@ -1,11 +1,11 @@
-name: Deploy to Server
+name: Build and Deploy
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -29,16 +29,30 @@ jobs:
     - name: Prepare deployment files
       run: |
         mkdir -p deploy
-        cp docker-compose.yml deploy/
         cp nginx.conf deploy/
         cp prometheus.yml deploy/
         tar -czf deploy.tar.gz deploy
+
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: deploy-package
+        path: deploy.tar.gz
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download deployment artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: deploy-package
 
     - name: Deploy to Server
       uses: appleboy/ssh-action@master
       env:
         API_KEY: ${{ secrets.API_KEY }}
-        DOCKER_IMAGE: batuergun/terraweb:${{ github.sha }}
+        DOCKER_IMAGE: yourdockerhubusername/costerra-api:${{ github.sha }}
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: github-deploy
@@ -49,7 +63,6 @@ jobs:
           cd ~/terraweb
           echo "API_KEY=$API_KEY" > .env
           echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> .env
-        script_stop: true
 
     - name: Copy deployment files
       uses: appleboy/scp-action@master
@@ -73,20 +86,20 @@ jobs:
           rm -rf deploy deploy.tar.gz
           
           # Stop and remove existing containers
-          docker stop terraweb-api terraweb-nginx terraweb-certbot terraweb-prometheus terraweb-grafana || true
-          docker rm terraweb-api terraweb-nginx terraweb-certbot terraweb-prometheus terraweb-grafana || true
+          docker stop costerra-api costerra-nginx costerra-certbot costerra-prometheus costerra-grafana || true
+          docker rm costerra-api costerra-nginx costerra-certbot costerra-prometheus costerra-grafana || true
           
           # Create network if it doesn't exist
           docker network create app-network || true
-
+          
           # Start API container
-          docker run -d --name terraweb-api \
+          docker run -d --name costerra-api \
             --network app-network \
             -e API_KEY=$(cat .env | grep API_KEY | cut -d '=' -f2) \
             $(cat .env | grep DOCKER_IMAGE | cut -d '=' -f2)
           
           # Start Nginx container
-          docker run -d --name terraweb-nginx \
+          docker run -d --name costerra-nginx \
             --network app-network \
             -p 80:80 -p 443:443 \
             -v $(pwd)/nginx.conf:/etc/nginx/nginx.conf:ro \
@@ -95,20 +108,20 @@ jobs:
             nginx:alpine
           
           # Start Certbot container
-          docker run -d --name terraweb-certbot \
+          docker run -d --name costerra-certbot \
             --network app-network \
             -v $(pwd)/certbot/conf:/etc/letsencrypt \
             -v $(pwd)/certbot/www:/var/www/certbot \
             certbot/certbot certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d yourdomain.com --agree-tos
           
           # Start Prometheus container
-          docker run -d --name terraweb-prometheus \
+          docker run -d --name costerra-prometheus \
             --network app-network \
             -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
             prom/prometheus
           
           # Start Grafana container
-          docker run -d --name terraweb-grafana \
+          docker run -d --name costerra-grafana \
             --network app-network \
             -v grafana-storage:/var/lib/grafana \
             grafana/grafana
