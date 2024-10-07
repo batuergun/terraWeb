@@ -7,13 +7,19 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { X, Send, MessageCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { X, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Search } from "lucide-react";
 
-import { fetchAgricultureData } from "@/utils/dataFetchers";
+import { fetchAgricultureData, generateLandSummary } from "@/utils/dataFetchers";
 
 interface CustomLayerInterface extends maptilersdk.CustomLayerInterface {
   camera?: THREE.Camera;
@@ -28,6 +34,20 @@ export type SensorData = {
   latitude: number;
   longitude: number;
   timestamp: string;
+};
+
+const demoSensorData: SensorData = {
+  temperature: 25.5,
+  humidity: 60,
+  latitude: 41.3611847,
+  longitude: 36.1770237,
+  timestamp: new Date().toISOString(),
+};
+
+type SearchResult = {
+  id: string;
+  place_name: string;
+  center: [number, number];
 };
 
 export default function Map() {
@@ -54,9 +74,16 @@ export default function Map() {
   );
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hello! How can I help you with information about this land?' },
+    {
+      role: "assistant",
+      content: "Hello! How can I help you with information about this land?",
+    },
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const add3DModel = useCallback(() => {
     if (!map.current || !is3DModelEnabled) {
@@ -79,7 +106,7 @@ export default function Map() {
       rotateX: modelRotate[0],
       rotateY: modelRotate[1],
       rotateZ: modelRotate[2],
-      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 20,
+      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 10,
     };
 
     const customLayer: CustomLayerInterface = {
@@ -92,11 +119,11 @@ export default function Map() {
         this.scene = new THREE.Scene();
 
         // Remove ambient and directional lights
-        // const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        // this.scene.add(ambientLight);
-        // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        // directionalLight.position.set(0, -70, 100).normalize();
-        // this.scene.add(directionalLight);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        this.scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, -70, 100).normalize();
+        this.scene.add(directionalLight);
 
         const loader = new GLTFLoader();
         loader.load(
@@ -252,130 +279,124 @@ export default function Map() {
   }, [sensorData]);
 
   const fetchSensorData = async () => {
-    console.log("Fetching sensor data...");
-    try {
-      const response = await fetch("/api/sensor-data", {
-        headers: {
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_TOKEN}`,
-        },
-      });
-      if (response.ok) {
-        const data: SensorData = await response.json();
-        console.log("Sensor data fetched:", data);
-        setSensorData(data);
+    setSensorData(demoSensorData);
 
-        if (map.current && data.latitude && data.longitude) {
-          if (sensorMarkerRef.current) {
-            sensorMarkerRef.current.setLngLat([data.longitude, data.latitude]);
-            console.log("Existing sensor marker updated");
-          } else {
-            sensorMarkerRef.current = new maptilersdk.Marker({
-              color: "#FF0000",
-            })
-              .setLngLat([data.longitude, data.latitude])
-              .addTo(map.current);
-            console.log("New sensor marker added");
-          }
-        }
+    if (map.current && demoSensorData.latitude && demoSensorData.longitude) {
+      if (sensorMarkerRef.current) {
+        sensorMarkerRef.current.setLngLat([
+          demoSensorData.longitude,
+          demoSensorData.latitude,
+        ]);
+        console.log("Existing sensor marker updated");
       } else {
-        console.error(
-          "Failed to fetch sensor data:",
-          response.status,
-          response.statusText
-        );
-        setSensorData(null);
+        sensorMarkerRef.current = new maptilersdk.Marker({
+          color: "#FF0000",
+        })
+          .setLngLat([demoSensorData.longitude, demoSensorData.latitude])
+          .addTo(map.current);
+        console.log("New sensor marker added");
       }
-    } catch (error) {
-      console.error("Error fetching sensor data:", error);
-      setSensorData(null);
     }
   };
 
-  const getDistance = useCallback((
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ) => {
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) *
-        Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const d = R * c; // Distance in km
-    return d;
-  }, []);
+  const getDistance = useCallback(
+    (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371; // Radius of the earth in km
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) *
+          Math.cos(deg2rad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const d = R * c; // Distance in km
+      return d;
+    },
+    []
+  );
 
-  const handleMapClick = useCallback(async (e: maptilersdk.MapMouseEvent) => {
-    const { lng, lat } = e.lngLat;
-    console.log("Map clicked. Coordinates:", lng, lat);
-    setSelectedCoordinates([lng, lat]);
-    setIsChatboxOpen(true);
-    setIsLoadingSummary(true);
-    setLandSummary(null);
+  const handleMapClick = useCallback(
+    async (e: maptilersdk.MapMouseEvent) => {
+      const { lng, lat } = e.lngLat;
+      console.log("Map clicked. Coordinates:", lng, lat);
+      setSelectedCoordinates([lng, lat]);
+      setIsChatboxOpen(true);
+      setIsLoadingSummary(true);
+      setLandSummary(null);
 
-    if (map.current) {
-      if (clickMarkerRef.current) {
-        clickMarkerRef.current.remove();
+      if (map.current) {
+        if (clickMarkerRef.current) {
+          clickMarkerRef.current.remove();
+        }
+
+        // Create a custom marker element
+        const el = document.createElement("div");
+        el.className = "custom-marker";
+        el.style.width = "20px";
+        el.style.height = "20px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = "#FFFFFF";
+        el.style.border = "2px solid #000000"; // Black border
+        el.style.boxShadow = "0 0 5px rgba(0,0,0,0.5)"; // Shadow for better visibility
+
+        // Create a new marker with the custom element
+        clickMarkerRef.current = new maptilersdk.Marker({
+          element: el,
+        })
+          .setLngLat([lng, lat])
+          .addTo(map.current);
+
+        // Check if click is within 10km of sensor
+        if (sensorData) {
+          const distance = getDistance(
+            lat,
+            lng,
+            sensorData.latitude,
+            sensorData.longitude
+          );
+          console.log(`Distance to sensor: ${distance.toFixed(2)} km`);
+          setNearSensor(distance <= 10);
+          console.log(`Near sensor: ${distance <= 10}`);
+        } else {
+          console.log("No sensor data available");
+        }
+
+        try {
+          // Fetch terrain and land cover data
+          const agricultureData = await fetchAgricultureData(lat, lng);
+
+          // Generate summary using GPT-4
+          const summary = await generateLandSummary(
+            lat,
+            lng,
+            agricultureData,
+            sensorData
+          );
+          setLandSummary(summary);
+        } catch (error) {
+          console.error("Error fetching data or generating summary:", error);
+          setLandSummary("Unable to generate land summary at this time.");
+        } finally {
+          setIsLoadingSummary(false);
+        }
       }
-
-      // Create a custom marker element
-      const el = document.createElement('div');
-      el.className = 'custom-marker';
-      el.style.width = '20px';
-      el.style.height = '20px';
-      el.style.borderRadius = '50%';
-      el.style.backgroundColor = '#FFFFFF';
-      el.style.border = '2px solid #000000'; // Black border
-      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)'; // Shadow for better visibility
-
-      // Create a new marker with the custom element
-      clickMarkerRef.current = new maptilersdk.Marker({
-        element: el
-      })
-        .setLngLat([lng, lat])
-        .addTo(map.current);
-
-      // Check if click is within 10km of sensor
-      if (sensorData) {
-        const distance = getDistance(
-          lat,
-          lng,
-          sensorData.latitude,
-          sensorData.longitude
-        );
-        console.log(`Distance to sensor: ${distance.toFixed(2)} km`);
-        setNearSensor(distance <= 10);
-        console.log(`Near sensor: ${distance <= 10}`);
-      } else {
-        console.log("No sensor data available");
-      }
-
-      try {
-        // Fetch terrain and land cover data
-        const agricultureData = await fetchAgricultureData(lat, lng);
-
-        // Generate summary using GPT-4
-        const summary = await generateLandSummary(
-          lat,
-          lng,
-          agricultureData,
-          sensorData
-        );
-        setLandSummary(summary);
-      } catch (error) {
-        console.error("Error fetching data or generating summary:", error);
-        setLandSummary("Unable to generate land summary at this time.");
-      } finally {
-        setIsLoadingSummary(false);
-      }
-    }
-  }, [sensorData, map, setSelectedCoordinates, setIsChatboxOpen, setIsLoadingSummary, setLandSummary, clickMarkerRef, setNearSensor, getDistance, fetchAgricultureData, generateLandSummary]);
+    },
+    [
+      sensorData,
+      map,
+      setSelectedCoordinates,
+      setIsChatboxOpen,
+      setIsLoadingSummary,
+      setLandSummary,
+      clickMarkerRef,
+      setNearSensor,
+      getDistance,
+      fetchAgricultureData,
+      generateLandSummary,
+    ]
+  );
 
   useEffect(() => {
     if (map.current) {
@@ -404,15 +425,15 @@ export default function Map() {
 
   const handleSend = async () => {
     if (input.trim()) {
-      const userMessage = { role: 'user', content: input };
-      setMessages(prev => [...prev, userMessage]);
-      setInput('');
+      const userMessage = { role: "user", content: input };
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
 
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
+        const response = await fetch("/api/chat", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             messages: [...messages, userMessage],
@@ -423,21 +444,110 @@ export default function Map() {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to get chat response');
+          throw new Error("Failed to get chat response");
         }
 
         const data = await response.json();
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.message },
+        ]);
       } catch (error) {
-        console.error('Error in chat:', error);
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
+        console.error("Error in chat:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Sorry, I encountered an error. Please try again.",
+          },
+        ]);
       }
+    }
+  };
+
+  const handleSearch = useCallback(async () => {
+    if (searchQuery.length > 0 && (!selectedResult || searchQuery !== selectedResult.place_name)) {
+      try {
+        const response = await fetch(`https://api.maptiler.com/geocoding/${encodeURIComponent(searchQuery)}.json?key=${process.env.NEXT_PUBLIC_MAPTILER_API_KEY}`);
+        const data = await response.json();
+        setSearchResults(data.features);
+        setSelectedResult(null);
+      } catch (error) {
+        console.error('Error searching:', error);
+      }
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery, selectedResult]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      handleSearch();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, handleSearch]);
+
+  const handleResultClick = (result: SearchResult) => {
+    setSearchQuery(result.place_name);
+    setSelectedResult(result);
+    setSearchResults([]);
+    inputRef.current?.focus();
+
+    if (map.current) {
+      map.current.flyTo({ center: result.center, zoom: 14 });
     }
   };
 
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="absolute w-full h-full" />
+
+      {/* search box */}
+      <div className="absolute top-4 left-4 z-20 w-full max-w-sm">
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            className="w-full pl-10 pr-2 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
+            placeholder="Search locations..."
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search locations"
+            aria-autocomplete="list"
+            aria-controls="search-results"
+          />
+          <Button
+            className="absolute inset-y-0 left-0 flex items-center pl-3"
+            type="submit"
+            variant="ghost"
+            aria-label="Submit search"
+            onClick={handleSearch}
+          >
+            <Search className="h-4 w-4 text-gray-400" />
+          </Button>
+        </div>
+        {searchResults.length > 0 && (
+          <ul
+            id="search-results"
+            className="mt-2 bg-white rounded-md shadow-lg max-h-60 overflow-auto"
+            role="listbox"
+          >
+            {searchResults.map((result) => (
+              <li 
+                key={result.id}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => handleResultClick(result)}
+                role="option"
+                aria-selected={result === selectedResult}
+              >
+                {result.place_name}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {modelLoadingError && (
         <div className="absolute top-0 left-0 bg-red-500 text-white p-2 m-2 rounded">
           {modelLoadingError}
@@ -450,11 +560,13 @@ export default function Map() {
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute top-4 left-4 bottom-4 w-80 bg-white shadow-lg rounded-2xl overflow-hidden"
+            className="absolute top-2 left-4 bottom-4 w-96 bg-white shadow-lg rounded-2xl overflow-hidden mt-14"
           >
             <div className="h-full flex flex-col">
               <div className="flex justify-between items-center p-4 border-b">
-                <h2 className="text-2xl font-bold text-gray-800">Land Information</h2>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  Land Information
+                </h2>
                 <button
                   onClick={() => {
                     setIsChatboxOpen(false);
@@ -462,16 +574,29 @@ export default function Map() {
                   }}
                   className="text-gray-600 hover:text-gray-800 transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
-              
+
               <div className="flex-grow overflow-y-auto p-4">
                 {selectedCoordinates && (
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800">Selected Location</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Selected Location
+                    </h3>
                     <p className="text-sm text-gray-700">
                       Latitude: {selectedCoordinates[1].toFixed(6)}
                       <br />
@@ -479,9 +604,11 @@ export default function Map() {
                     </p>
                   </div>
                 )}
-                
+
                 <div className="mb-4">
-                  <h3 className="text-lg font-bold mb-1 text-gray-800">Land Summary</h3>
+                  <h3 className="text-lg font-bold mb-1 text-gray-800">
+                    Land Summary
+                  </h3>
                   {isLoadingSummary ? (
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-full" />
@@ -502,25 +629,39 @@ export default function Map() {
                       </button>
                     </>
                   ) : (
-                    <p className="text-gray-700">Click on the map to generate a land summary.</p>
+                    <p className="text-gray-700">
+                      Click on the map to generate a land summary.
+                    </p>
                   )}
                 </div>
-                
+
                 {nearSensor && sensorData && (
                   <div className="mt-4">
-                    <h3 className="text-lg font-semibold mb-2 text-gray-800">Nearby Sensor Data</h3>
+                    <h3 className="text-lg font-semibold mb-2 text-gray-800">
+                      Nearby Sensor Data
+                    </h3>
                     <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-500">Temperature</span>
-                          <span className="text-sm font-semibold text-gray-900">{sensorData.temperature}°C</span>
+                          <span className="text-sm font-medium text-gray-500">
+                            Temperature
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {sensorData.temperature}°C
+                          </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-500">Humidity</span>
-                          <span className="text-sm font-semibold text-gray-900">{sensorData.humidity}%</span>
+                          <span className="text-sm font-medium text-gray-500">
+                            Humidity
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {sensorData.humidity}%
+                          </span>
                         </div>
                         <div className="pt-2 border-t border-gray-200">
-                          <span className="text-xs text-gray-500">Last updated:</span>
+                          <span className="text-xs text-gray-500">
+                            Last updated:
+                          </span>
                           <span className="text-xs font-medium text-gray-900 ml-1">
                             {new Date(sensorData.timestamp).toLocaleString()}
                           </span>
@@ -557,7 +698,12 @@ export default function Map() {
             <Card className="w-full max-w-lg shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
                 <h2 className="text-2xl font-semibold">Chat about this land</h2>
-                <Button variant="ghost" size="icon" onClick={() => setIsChatOpen(false)} aria-label="Close chat">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsChatOpen(false)}
+                  aria-label="Close chat"
+                >
                   <X className="h-6 w-6" />
                 </Button>
               </CardHeader>
@@ -567,14 +713,14 @@ export default function Map() {
                     <div
                       key={index}
                       className={`mb-4 ${
-                        message.role === 'user' ? 'text-right' : 'text-left'
+                        message.role === "user" ? "text-right" : "text-left"
                       }`}
                     >
                       <div
                         className={`inline-block rounded-lg px-4 py-2 ${
-                          message.role === 'user'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted'
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
                         }`}
                       >
                         {message.content}
@@ -586,8 +732,8 @@ export default function Map() {
               <CardFooter>
                 <form
                   onSubmit={(e) => {
-                    e.preventDefault()
-                    handleSend()
+                    e.preventDefault();
+                    handleSend();
                   }}
                   className="flex w-full items-center space-x-2"
                 >
@@ -607,39 +753,6 @@ export default function Map() {
           </motion.div>
         )}
       </AnimatePresence>
-      <Button
-        className="fixed bottom-4 right-4 rounded-full p-4 z-40"
-        onClick={() => setIsChatOpen(true)}
-        aria-label="Open chat"
-      >
-        <MessageCircle className="h-6 w-6" />
-      </Button>
     </div>
   );
-}
-export async function generateLandSummary(
-  lat: number,
-  lng: number,
-  agricultureData: Record<string, unknown>,
-  sensorData: SensorData | null
-) {
-  try {
-    const response = await fetch("/api/land-summary", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ lat, lng, agricultureData, sensorData }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to generate land summary");
-    }
-
-    const data = await response.json();
-    return data.summary;
-  } catch (error) {
-    console.error("Error generating land summary:", error);
-    return "Unable to generate land summary at this time.";
-  }
 }

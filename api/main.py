@@ -7,7 +7,7 @@ import planetary_computer
 import pystac_client
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from typing import Dict, Any
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -17,19 +17,14 @@ app = FastAPI()
 Instrumentator().instrument(app).expose(app)
 
 class NDVIRequest(BaseModel):
-    latitude: float = 38.6
-    longitude: float = -121.5
-    buffer: float = 1
+    latitude: float
+    longitude: float
+    buffer: float = 1.0
     year: str = '2021'
 
-async def verify_api_key(api_key: str = Depends(lambda: os.getenv("API_KEY"))):
-    if not api_key:
-        raise HTTPException(status_code=403, detail="API key is missing")
-    # Add your API key verification logic here
-    return api_key
-
 @app.post("/get_ndvi")
-async def ndvi_endpoint(request: NDVIRequest, api_key: str = Depends(verify_api_key)):
+async def ndvi_endpoint(request: NDVIRequest):
+    print(f"Received request: {request}")
     try:
         result = await get_ndvi(request)
         return result
@@ -130,15 +125,6 @@ def main(params):
     dict
         The response from the function.
     """
-    # Check for API key
-    api_key = params.get('api_key')
-    if not verify_api_key(api_key):
-        return {
-            "statusCode": 403,
-            "body": "Invalid API key"
-        }
-
-    # If API key is valid, proceed with the function
     try:
         request = NDVIRequest(**params)
         # Use asyncio to run the async function
@@ -159,7 +145,3 @@ def main(params):
             "statusCode": 500,
             "body": "Internal server error"
         }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)

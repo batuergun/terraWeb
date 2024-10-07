@@ -14,10 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose the port that the app runs on
-EXPOSE 8080
+EXPOSE 8000
 
 # Set the environment variable for the API key
 ENV API_KEY=${API_KEY}
 
 # Run the application
-CMD ["python", "-m", "costerra.api.__main__"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
