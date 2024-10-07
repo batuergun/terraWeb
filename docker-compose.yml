@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE}
     environment:
       - API_KEY=${API_KEY}
     expose:
@@ -25,7 +23,6 @@ services:
       - api
     networks:
       - app-network
-    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
 
   certbot:
     image: certbot/certbot

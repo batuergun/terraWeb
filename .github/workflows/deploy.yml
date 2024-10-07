@@ -1,0 +1,47 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and push API Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: ./api
+        push: true
+        tags: batuergun/terraweb:${{ github.sha }}
+
+    - name: Deploy to Server
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: github-deploy
+        key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+        script: |
+          if [ ! -d "/opt/costerra" ]; then
+            mkdir -p /opt/costerra
+            cd /opt/costerra
+            git clone https://github.com/batuergun/terraweb.git .
+          else
+            cd /opt/costerra
+            git fetch --all
+            git reset --hard origin/main
+          fi
+          echo "DOCKER_IMAGE=batuergun/terraweb:${{ github.sha }}" > .env
+          sudo docker-compose pull
+          sudo docker-compose up -d
