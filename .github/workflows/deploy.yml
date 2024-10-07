@@ -71,5 +71,44 @@ jobs:
           tar -xzf deploy.tar.gz
           mv deploy/* .
           rm -rf deploy deploy.tar.gz
-          docker-compose pull
-          docker-compose up -d
+          
+          # Stop and remove existing containers
+          docker stop terraweb-api terraweb-nginx terraweb-certbot terraweb-prometheus terraweb-grafana || true
+          docker rm terraweb-api terraweb-nginx terraweb-certbot terraweb-prometheus terraweb-grafana || true
+          
+          # Create network if it doesn't exist
+          docker network create app-network || true
+
+          # Start API container
+          docker run -d --name terraweb-api \
+            --network app-network \
+            -e API_KEY=$(cat .env | grep API_KEY | cut -d '=' -f2) \
+            $(cat .env | grep DOCKER_IMAGE | cut -d '=' -f2)
+          
+          # Start Nginx container
+          docker run -d --name terraweb-nginx \
+            --network app-network \
+            -p 80:80 -p 443:443 \
+            -v $(pwd)/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/certbot/conf:/etc/letsencrypt \
+            -v $(pwd)/certbot/www:/var/www/certbot \
+            nginx:alpine
+          
+          # Start Certbot container
+          docker run -d --name terraweb-certbot \
+            --network app-network \
+            -v $(pwd)/certbot/conf:/etc/letsencrypt \
+            -v $(pwd)/certbot/www:/var/www/certbot \
+            certbot/certbot certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d yourdomain.com --agree-tos
+          
+          # Start Prometheus container
+          docker run -d --name terraweb-prometheus \
+            --network app-network \
+            -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+            prom/prometheus
+          
+          # Start Grafana container
+          docker run -d --name terraweb-grafana \
+            --network app-network \
+            -v grafana-storage:/var/lib/grafana \
+            grafana/grafana
