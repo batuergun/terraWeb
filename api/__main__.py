@@ -7,6 +7,9 @@ import planetary_computer
 import pystac_client
 import numpy as np
 import pandas as pd
+from fastapi import FastAPI, HTTPException, Depends
+
+app = FastAPI()
 
 class NDVIRequest(BaseModel):
     latitude: float = 38.6
@@ -14,10 +17,21 @@ class NDVIRequest(BaseModel):
     buffer: float = 1
     year: str = '2021'
 
-def verify_api_key(provided_key):
-    expected_key = os.environ.get('API_KEY')
-    return provided_key == expected_key
+async def verify_api_key(api_key: str = Depends(lambda: os.getenv("API_KEY"))):
+    if not api_key:
+        raise HTTPException(status_code=403, detail="API key is missing")
+    # Add your API key verification logic here
+    return api_key
 
+@app.post("/get_ndvi")
+async def ndvi_endpoint(request: NDVIRequest, api_key: str = Depends(verify_api_key)):
+    try:
+        result = await get_ndvi(request)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Keep your existing get_ndvi function
 async def get_ndvi(request: NDVIRequest):
     try:
         catalog = pystac_client.Client.open(
@@ -136,3 +150,7 @@ def main(params):
             "statusCode": 500,
             "body": "Internal server error"
         }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

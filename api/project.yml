@@ -1,7 +1,0 @@
-environment:
-  API_KEY: ${API_KEY}
-packages:
-  - name: costerra
-    actions:
-      - name: api
-        runtime: 'python:3.11'
