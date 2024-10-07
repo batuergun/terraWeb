@@ -29,7 +29,7 @@ services:
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
-    command: certonly --webroot -w /var/www/certbot --force-renewal --email your-email@example.com -d yourdomain.com --agree-tos
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email batu@cosmosteam.org -d api.costerra.co --agree-tos
 
   prometheus:
     image: prom/prometheus

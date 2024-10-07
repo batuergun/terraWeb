@@ -24,7 +24,7 @@ jobs:
       with:
         context: ./api
         push: true
-        tags: yourdockerhubusername/costerra-api:${{ github.sha }}
+        tags: batuergun/terraweb:${{ github.sha }}
 
     - name: Deploy to Server
       uses: appleboy/ssh-action@master
